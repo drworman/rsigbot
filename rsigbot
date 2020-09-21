@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+
+import os
+
+import praw
+import praw.models
+import praw.models.util
+
+from rsigbotcfg import *
+
+################################################################################
+# Notes
+################################################################################
+# Will scan your post history and edit a signature into each text post
+# and comment.
+#
+# DEPENDS:  Python >=3.6.5
+#               May work with lower versions, but is untested.
+#           Praw
+#
+# USAGE:    $ rsigbot
+#
+# This file should not be edited, please use starfarmercfg.py for configuration.
+#
+################################################################################
+# Code
+################################################################################
+#
+# Change working directory to directory your script is in
+# so that it can read the correct praw.ini file
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+project_url = "http://github.com/drworman/rsigbot"
+project_version = '2.0.0'
+user_agent: str = 'python:rsigbot:v' + project_version + '(' + project_url + ') user: /u/' + username
+signature_spacer = "\n\n&nbsp;\n\n"
+signature_text = "*^(-- automatic signature by) [^(Reddit Signature Bot)](" + project_url + ") ^(--)*"
+
+reddit = praw.Reddit(client_id=client_id,
+                     client_secret=client_secret,
+                     password=password,
+                     username=username,
+                     user_agent=user_agent)
+
+target_user = reddit.redditor(username)
+stream = praw.models.util.stream_generator(lambda **kwargs: get_content_stream())
+results_length = 0
+
+
+def run_rsigbot():
+    signed_content = 0
+    for content in stream:
+        current_subreddit = str(content.subreddit)
+        if type(content) is praw.models.Submission:
+            content.edit(
+                content.selftext.split(str(signature_spacer + signature_text), 1)[0] + signature(current_subreddit))
+        if type(content) is praw.models.Comment:
+            content.edit(
+                content.body.split(str(signature_spacer + signature_text), 1)[0] + signature(current_subreddit))
+        if not daemon_mode:
+            signed_content += 1
+            if signed_content == results_length:
+                die('0')
+
+
+def get_content_stream():
+    global results_length
+    results = []
+    results.extend(target_user.submissions.new(limit=None))
+    results.extend(target_user.comments.new(limit=None))
+    results.sort(key=lambda post: post.created_utc, reverse=True)
+    if not daemon_mode:
+        results_length = len(results)
+    return results
+
+
+def signature(subreddit):
+    if subreddit in userSignatures:
+        if userSignatures[subreddit] is not None:
+            return str(signature_spacer + signature_text + "\n\n" + userSignatures[subreddit])
+        else:
+            return ""
+    else:
+        return str(signature_spacer + signature_text + "\n\n" + str(default_signature))
+
+
+exit_codes = {'0': 'Program complete', '1': 'Abnormal termination'}
+
+
+def die(exit_code):
+    exit("%s" % exit_codes.get(exit_code, '0'))
+
+
+def main():
+    while True:
+        run_rsigbot()
+
+
+if __name__ == '__main__':
+    main()
