@@ -42,6 +42,7 @@ reddit = praw.Reddit(client_id=client_id,
                      username=username,
                      user_agent=user_agent)
 
+reddit.validate_on_submit = True
 target_user = reddit.redditor(username)
 stream = praw.models.util.stream_generator(lambda **kwargs: get_content_stream())
 results_length = 0
